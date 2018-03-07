@@ -13,6 +13,7 @@ using NuGet.Common;
 
 namespace NuGet.Packaging.Signing
 {
+    /// <remarks>This is public only to facilitate testing.</remarks>
     public static class SignedPackageArchiveIOUtility
     {
         private const int _bufferSize = 4096;
@@ -28,7 +29,7 @@ namespace NuGet.Packaging.Signing
         /// </summary>
         /// <param name="reader">Binary reader to update current position</param>
         /// <param name="byteSignature">byte signature to be matched</param>
-        public static void SeekReaderForwardToMatchByteSignature(BinaryReader reader, byte[] byteSignature)
+        public static void SeekReaderForwardToMatchByteSignature(BinaryReader reader, byte[] byteSignature, long streamLength)
         {
             if (reader == null)
             {
@@ -43,19 +44,19 @@ namespace NuGet.Packaging.Signing
             var stream = reader.BaseStream;
             var originalPosition = stream.Position;
 
-            if (originalPosition + byteSignature.Length > stream.Length)
+            if (originalPosition + byteSignature.Length > streamLength)
             {
                 throw new ArgumentOutOfRangeException(nameof(byteSignature), Strings.ErrorByteSignatureTooBig);
             }
 
-            while (stream.Position <= (stream.Length - byteSignature.Length))
+            while (stream.Position <= (streamLength - byteSignature.Length))
             {
-                if (CurrentStreamPositionMatchesByteSignature(reader, byteSignature))
+                if (CurrentStreamPositionMatchesByteSignature(reader, byteSignature, streamLength))
                 {
                     return;
                 }
 
-                stream.Position += 1;
+                stream.Seek(offset: 1, origin: SeekOrigin.Current);
             }
 
             stream.Seek(offset: originalPosition, origin: SeekOrigin.Begin);
@@ -72,7 +73,7 @@ namespace NuGet.Packaging.Signing
         /// </summary>
         /// <param name="reader">Binary reader to update current position</param>
         /// <param name="byteSignature">byte signature to be matched</param>
-        public static void SeekReaderBackwardToMatchByteSignature(BinaryReader reader, byte[] byteSignature)
+        public static void SeekReaderBackwardToMatchByteSignature(BinaryReader reader, byte[] byteSignature, long streamLength)
         {
             if (reader == null)
             {
@@ -87,14 +88,14 @@ namespace NuGet.Packaging.Signing
             var stream = reader.BaseStream;
             var originalPosition = stream.Position;
 
-            if (originalPosition + byteSignature.Length > stream.Length)
+            if (originalPosition + byteSignature.Length > streamLength)
             {
                 throw new ArgumentOutOfRangeException(nameof(byteSignature), Strings.ErrorByteSignatureTooBig);
             }
 
             while (stream.Position >= 0)
             {
-                if (CurrentStreamPositionMatchesByteSignature(reader, byteSignature))
+                if (CurrentStreamPositionMatchesByteSignature(reader, byteSignature, streamLength))
                 {
                     return;
                 }
@@ -104,7 +105,7 @@ namespace NuGet.Packaging.Signing
                     break;
                 }
 
-                stream.Position -= 1;
+                stream.Seek(offset: -1, origin: SeekOrigin.Current);
             }
 
             stream.Seek(offset: originalPosition, origin: SeekOrigin.Begin);
@@ -122,7 +123,7 @@ namespace NuGet.Packaging.Signing
         /// <param name="reader">Read bytes from this stream.</param>
         /// <param name="writer">Write bytes to this stream.</param>
         /// <param name="position">Position to stop copying data.</param>
-        public static void ReadAndWriteUntilPosition(BinaryReader reader, BinaryWriter writer, long position)
+        public static void ReadAndWriteUntilPosition(BinaryReader reader, BinaryWriter writer, long position, long streamLength)
         {
             if (reader == null)
             {
@@ -134,7 +135,7 @@ namespace NuGet.Packaging.Signing
                 throw new ArgumentNullException(nameof(writer));
             }
 
-            if (position > reader.BaseStream.Length)
+            if (position > streamLength)
             {
                 throw new ArgumentOutOfRangeException(nameof(position), Strings.SignedPackageArchiveIOExtraRead);
             }
@@ -165,14 +166,14 @@ namespace NuGet.Packaging.Signing
         /// <param name="reader">Read bytes from this stream</param>
         /// <param name="hashAlgorithm">HashAlgorithm used to hash contents</param>
         /// <param name="position">Position to stop copying data</param>
-        public static void ReadAndHashUntilPosition(BinaryReader reader, HashAlgorithm hashAlgorithm, long position)
+        public static void ReadAndHashUntilPosition(BinaryReader reader, HashAlgorithm hashAlgorithm, long position, long streamLength)
         {
             if (reader == null)
             {
                 throw new ArgumentNullException(nameof(reader));
             }
 
-            if (position > reader.BaseStream.Length)
+            if (position > streamLength)
             {
                 throw new ArgumentOutOfRangeException(nameof(position), Strings.SignedPackageArchiveIOExtraRead);
             }
@@ -232,9 +233,11 @@ namespace NuGet.Packaging.Signing
                 throw new ArgumentNullException(nameof(reader));
             }
 
+            var streamLength = reader.BaseStream.Length;
             var metadata = new SignedPackageArchiveMetadata()
             {
-                StartOfFileHeaders = reader.BaseStream.Length
+                FileSize = streamLength,
+                StartOfFileHeaders = streamLength
             };
 
             var endOfCentralDirectoryRecord = EndOfCentralDirectoryRecord.Read(reader);
@@ -322,12 +325,12 @@ namespace NuGet.Packaging.Signing
                 // the start of the next file header (or the start of the first central directory header)
                 try
                 {
-                    SeekReaderForwardToMatchByteSignature(reader, BitConverter.GetBytes(LocalFileHeader.Signature));
+                    SeekReaderForwardToMatchByteSignature(reader, BitConverter.GetBytes(LocalFileHeader.Signature), metadata.FileSize);
                 }
                 // No local File header found (entry must be the last entry), search for the start of the first central directory
                 catch
                 {
-                    SeekReaderForwardToMatchByteSignature(reader, BitConverter.GetBytes(CentralDirectoryHeader.Signature));
+                    SeekReaderForwardToMatchByteSignature(reader, BitConverter.GetBytes(CentralDirectoryHeader.Signature), metadata.FileSize);
                 }
 
                 record.IndexInHeaders = centralDirectoryRecordIndex;
@@ -522,13 +525,14 @@ namespace NuGet.Packaging.Signing
             var signatureBytes = signatureStream.ToArray();
             var signatureCrc32 = Crc32.CalculateCrc(signatureBytes);
             var signatureDosTime = DateTimeToDosTime(DateTime.Now);
+            var streamLength = reader.BaseStream.Length;
 
             // ensure both streams are reset
             reader.BaseStream.Seek(offset: 0, origin: SeekOrigin.Begin);
             writer.BaseStream.Seek(offset: 0, origin: SeekOrigin.Begin);
 
             // copy all data till previous end of local file headers
-            ReadAndWriteUntilPosition(reader, writer, packageMetadata.EndOfFileHeaders);
+            ReadAndWriteUntilPosition(reader, writer, packageMetadata.EndOfFileHeaders, streamLength: streamLength);
 
             // write the signature local file header
             var signatureFileHeaderLength = WriteLocalFileHeaderIntoZip(writer, signatureBytes, signatureCrc32, signatureDosTime);
@@ -537,18 +541,18 @@ namespace NuGet.Packaging.Signing
             var signatureFileLength = WriteFileIntoZip(writer, signatureBytes);
 
             // copy all data that was after previous end of local file headers till previous end of central directory headers
-            ReadAndWriteUntilPosition(reader, writer, packageMetadata.EndOfCentralDirectory);
+            ReadAndWriteUntilPosition(reader, writer, packageMetadata.EndOfCentralDirectory, streamLength: streamLength);
 
             // write the central directory header for signature file
             var signatureCentralDirectoryHeaderLength = WriteCentralDirectoryHeaderIntoZip(writer, signatureBytes, signatureCrc32, signatureDosTime, packageMetadata.EndOfFileHeaders);
 
             // copy all data that was after previous end of central directory headers till previous start of end of central directory record
-            ReadAndWriteUntilPosition(reader, writer, packageMetadata.EndOfCentralDirectoryRecordPosition);
+            ReadAndWriteUntilPosition(reader, writer, packageMetadata.EndOfCentralDirectoryRecordPosition, streamLength: streamLength);
 
             var totalSignatureSize = signatureFileHeaderLength + signatureFileLength;
 
             // update and write the end of central directory record
-            ReadAndWriteUpdatedEndOfCentralDirectoryRecordIntoZip(reader, writer, signatureCentralDirectoryHeaderLength, totalSignatureSize);
+            ReadAndWriteUpdatedEndOfCentralDirectoryRecordIntoZip(reader, writer, signatureCentralDirectoryHeaderLength, totalSignatureSize, endOfStream: streamLength);
         }
 
         /// <summary>
@@ -710,10 +714,11 @@ namespace NuGet.Packaging.Signing
             BinaryReader reader,
             BinaryWriter writer,
             long sizeOfSignatureCentralDirectoryRecord,
-            long sizeOfSignatureFileHeaderAndData)
+            long sizeOfSignatureFileHeaderAndData,
+            long endOfStream)
         {
             // 4 bytes for disk numbers. same as before.
-            ReadAndWriteUntilPosition(reader, writer, reader.BaseStream.Position + 8L);
+            ReadAndWriteUntilPosition(reader, writer, reader.BaseStream.Position + 8L, streamLength: endOfStream);
 
             // Update central directory header counts by adding 1 for the signature entry
             var centralDirectoryCountOnThisDisk = reader.ReadUInt16();
@@ -731,10 +736,10 @@ namespace NuGet.Packaging.Signing
             writer.Write((uint)(offsetOfCentralDirectory + sizeOfSignatureFileHeaderAndData));
 
             // read and write the rest of the data
-            ReadAndWriteUntilPosition(reader, writer, reader.BaseStream.Length);
+            ReadAndWriteUntilPosition(reader, writer, endOfStream, streamLength: endOfStream);
         }
 
-        private static bool CurrentStreamPositionMatchesByteSignature(BinaryReader reader, byte[] byteSignature)
+        private static bool CurrentStreamPositionMatchesByteSignature(BinaryReader reader, byte[] byteSignature, long streamLength)
         {
             if (reader == null)
             {
@@ -746,13 +751,13 @@ namespace NuGet.Packaging.Signing
                 throw new ArgumentException(Strings.ArgumentCannotBeNullOrEmpty, nameof(byteSignature));
             }
 
-            var stream = reader.BaseStream;
 
-            if (stream.Length < byteSignature.Length)
+            if (streamLength < byteSignature.Length)
             {
                 return false;
             }
 
+            var stream = reader.BaseStream;
             var startingOffset = stream.Position;
 
             for (var i = 0; i < byteSignature.Length; ++i)

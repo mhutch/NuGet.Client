@@ -127,7 +127,7 @@ namespace NuGet.Packaging.Signing
 
                 var savedPosition = reader.BaseStream.Position;
 
-                reader.BaseStream.Position = centralDirectoryHeader.RelativeOffsetOfLocalHeader;
+                reader.BaseStream.Seek(centralDirectoryHeader.RelativeOffsetOfLocalHeader, SeekOrigin.Begin);
 
                 LocalFileHeader localFileHeader;
 
@@ -137,7 +137,7 @@ namespace NuGet.Packaging.Signing
                     return true;
                 }
 
-                reader.BaseStream.Position = savedPosition;
+                reader.BaseStream.Seek(savedPosition, SeekOrigin.Begin);
             }
 
             return false;

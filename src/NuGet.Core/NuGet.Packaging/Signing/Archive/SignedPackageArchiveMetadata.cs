@@ -40,5 +40,10 @@ namespace NuGet.Packaging.Signing
         /// Offset, in bytes, to the start of "End of Central Directory Record" relative to the start of the archive.
         /// </summary>
         public long EndOfCentralDirectoryRecordPosition { get; set; }
+
+        /// <summary>
+        /// Value gotten from stream.Length for the package archive file stream.
+        /// </summary>
+        public long FileSize { get; set; }
     }
 }
