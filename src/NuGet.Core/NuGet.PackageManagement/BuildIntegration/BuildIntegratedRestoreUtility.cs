@@ -168,7 +168,7 @@ namespace NuGet.PackageManagement
                         dependency?.IncludeType == LibraryIncludeFlags.All)
                     {
                         dependency.SuppressParent = LibraryIncludeFlags.All;
-                        dependency.IncludeType = LibraryIncludeFlags.All & ~LibraryIncludeFlags.Runtime;
+                        dependency.IncludeType = LibraryIncludeFlags.All & ~LibraryIncludeFlags.Compile;
                     }
                 }
             }

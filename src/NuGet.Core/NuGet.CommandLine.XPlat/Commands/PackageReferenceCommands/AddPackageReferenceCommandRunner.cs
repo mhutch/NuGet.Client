@@ -239,7 +239,7 @@ namespace NuGet.CommandLine.XPlat
                         dependency?.IncludeType == LibraryIncludeFlags.All)
                     {
                         dependency.SuppressParent = LibraryIncludeFlags.All;
-                        dependency.IncludeType = LibraryIncludeFlags.All & ~LibraryIncludeFlags.Runtime;
+                        dependency.IncludeType = LibraryIncludeFlags.All & ~LibraryIncludeFlags.Compile;
                     }
 
                     if (dependency != null)
