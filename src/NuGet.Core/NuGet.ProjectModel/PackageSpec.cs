@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using NuGet.Common;
 using NuGet.LibraryModel;
 using NuGet.RuntimeModel;
 using NuGet.Shared;
@@ -181,7 +182,7 @@ namespace NuGet.ProjectModel
                    EqualityUtility.DictionaryOfSequenceEquals(Scripts, other.Scripts) &&
                    EqualityUtility.DictionaryEquals(PackInclude, other.PackInclude, (s, o) => StringComparer.Ordinal.Equals(s, o)) &&
                    EqualityUtility.EqualsWithNullCheck(PackOptions, other.PackOptions) &&
-                   EqualityUtility.SequenceEqualWithNullCheck(TargetFrameworks, other.TargetFrameworks) &&
+                   TargetFrameworks.OrderedEquals(other.TargetFrameworks, fw => fw.FrameworkName.Framework, PathUtility.GetStringComparerBasedOnOS()) &&
                    EqualityUtility.EqualsWithNullCheck(RuntimeGraph, other.RuntimeGraph) &&
                    EqualityUtility.EqualsWithNullCheck(RestoreMetadata, other.RestoreMetadata);
         }

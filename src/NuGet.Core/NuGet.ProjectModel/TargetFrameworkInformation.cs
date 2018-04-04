@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using NuGet.Common;
 using NuGet.Frameworks;
 using NuGet.LibraryModel;
 using NuGet.Shared;
@@ -67,7 +68,7 @@ namespace NuGet.ProjectModel
             }
 
             return EqualityUtility.EqualsWithNullCheck(FrameworkName, other.FrameworkName) &&
-                   Dependencies.OrderedEquals(other.Dependencies, dependency => dependency.Name, StringComparer.Ordinal) &&
+                   Dependencies.OrderedEquals(other.Dependencies, dependency => dependency.Name, PathUtility.GetStringComparerBasedOnOS()) &&
                    Imports.SequenceEqualWithNullCheck(other.Imports) &&
                    AssetTargetFallback == other.AssetTargetFallback;
         }
