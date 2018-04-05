@@ -165,8 +165,8 @@ namespace NuGet.ProjectModel
                    PathUtility.GetStringComparerBasedOnOS().Equals(PackagesPath, other.PackagesPath) &&
                    ConfigFilePaths.OrderedEquals(other.ConfigFilePaths, filePath => filePath, PathUtility.GetStringComparerBasedOnOS()) &&
                    FallbackFolders.OrderedEquals(other.FallbackFolders, fallbackFolder => fallbackFolder, PathUtility.GetStringComparerBasedOnOS()) &&
-                   TargetFrameworks.OrderedEquals(other.TargetFrameworks, fw => fw.FrameworkName.Framework, PathUtility.GetStringComparerBasedOnOS()) &&
-                   OriginalTargetFrameworks.OrderedEquals(other.OriginalTargetFrameworks, fw => fw, PathUtility.GetStringComparerBasedOnOS()) &&
+                   EqualityUtility.SequenceEqualWithNullCheck(TargetFrameworks, other.TargetFrameworks) &&
+                   OriginalTargetFrameworks.OrderedEquals(other.OriginalTargetFrameworks, fw => fw, StringComparer.OrdinalIgnoreCase) &&
                    CrossTargeting == other.CrossTargeting &&
                    LegacyPackagesDirectory == other.LegacyPackagesDirectory &&
                    ValidateRuntimeAssets == other.ValidateRuntimeAssets &&
